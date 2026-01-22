@@ -23,6 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-.gitignore
-README.md
 *.md
+!README.md
+!.gitignore
