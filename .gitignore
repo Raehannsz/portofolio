@@ -23,6 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
+.gitignore
 README.md
 .COMPLETE_SUMMARY.md
 .CRUD_GUIDE.md
