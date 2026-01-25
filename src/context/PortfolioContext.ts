@@ -3,6 +3,11 @@ import type { Experience } from '../types/Experience'
 import type { Project } from '../types/Project'
 import { initialExperience } from '../data/experienceData'
 import { initialProjects } from '../data/projectData'
+import {
+  fetchExperiences,
+  fetchProjects,
+  checkApiHealth
+} from '../services/api'
 
 interface PortfolioContextType {
   // Experience
@@ -16,6 +21,10 @@ interface PortfolioContextType {
   addProject: (project: Project) => void
   updateProject: (project: Project) => void
   deleteProject: (id: string) => void
+
+  // API status
+  isApiConnected: boolean
+  refreshData: () => Promise<void>
 }
 
 export const PortfolioContext = createContext<PortfolioContextType>(
@@ -31,9 +40,49 @@ export const PortfolioProvider = ({ children }: { children: React.ReactNode }) =
   const [experiences, setExperiences] = useState<Experience[]>(initialExperience)
   const [projects, setProjects] = useState<Project[]>(initialProjects)
   const [isHydrated, setIsHydrated] = useState(false)
+  const [isApiConnected, setIsApiConnected] = useState(false)
 
-  // Load from localStorage on mount
-  useEffect(() => {
+  /**
+   * Load data from API or fallback to localStorage
+   */
+  const loadData = async () => {
+    try {
+      // Check if API is available
+      const apiAvailable = await checkApiHealth()
+      setIsApiConnected(apiAvailable)
+
+      if (apiAvailable) {
+        // Fetch from API
+        const [apiExperiences, apiProjects] = await Promise.all([
+          fetchExperiences(),
+          fetchProjects()
+        ])
+
+        if (apiExperiences.length > 0) {
+          setExperiences(apiExperiences)
+        }
+        if (apiProjects.length > 0) {
+          setProjects(apiProjects)
+        }
+
+        console.log('✅ Data loaded from API')
+      } else {
+        // Fallback to localStorage
+        console.log('⚠️ API not available, using localStorage')
+        loadFromLocalStorage()
+      }
+    } catch (error) {
+      console.error('Failed to load data:', error)
+      loadFromLocalStorage()
+    }
+
+    setIsHydrated(true)
+  }
+
+  /**
+   * Load from localStorage (fallback)
+   */
+  const loadFromLocalStorage = () => {
     try {
       const savedExperiences = localStorage.getItem(STORAGE_KEYS.EXPERIENCES)
       const savedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS)
@@ -47,17 +96,28 @@ export const PortfolioProvider = ({ children }: { children: React.ReactNode }) =
     } catch (error) {
       console.error('Failed to load from localStorage:', error)
     }
-    setIsHydrated(true)
+  }
+
+  /**
+   * Refresh data from API
+   */
+  const refreshData = async () => {
+    await loadData()
+  }
+
+  // Load data on mount
+  useEffect(() => {
+    loadData()
   }, [])
 
-  // Save experiences to localStorage
+  // Save experiences to localStorage (backup)
   useEffect(() => {
     if (isHydrated) {
       localStorage.setItem(STORAGE_KEYS.EXPERIENCES, JSON.stringify(experiences))
     }
   }, [experiences, isHydrated])
 
-  // Save projects to localStorage
+  // Save projects to localStorage (backup)
   useEffect(() => {
     if (isHydrated) {
       localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects))
@@ -100,7 +160,9 @@ export const PortfolioProvider = ({ children }: { children: React.ReactNode }) =
     projects,
     addProject,
     updateProject,
-    deleteProject
+    deleteProject,
+    isApiConnected,
+    refreshData
   }
 
   return React.createElement(
@@ -109,3 +171,4 @@ export const PortfolioProvider = ({ children }: { children: React.ReactNode }) =
     children
   )
 }
+
